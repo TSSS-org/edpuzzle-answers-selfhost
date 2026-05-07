@@ -250,7 +250,7 @@ def media_proxy(media_id):
 
 @app.route("/")
 def homepage():
-  return render_template("index.html", dev_mode=config["dev_mode"], script_js=config["script.js"])
+  return render_template("index.html", dev_mode=config["dev_mode"], origin=config["origin"])
 
 @app.route("/discord")
 @app.route("/discord.html")
