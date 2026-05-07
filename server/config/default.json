@@ -14,11 +14,11 @@
   ],
   "gemini": {
     "key": "GEMINI_KEY",
-    "model": "gemma-3-27b-it" 
+    "model": "gemma-3-27b-it"
   },
   "rate_limit": {
     "captions": "60/minute",
     "generate": "60/minute",
     "media": "60/minute"
-  }  
+  }
 }

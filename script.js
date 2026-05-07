@@ -20,15 +20,15 @@ async function init() {
     );
     return;
   }
-  if (document.dev_env) {
+  if (document.dev_env)
     return try_mirror(document.dev_env);
-  }
 
   for (let mirror of mirrors) {
     try {
       await try_mirror(mirror);
       return;
-    } catch {}
+    }
+    catch {}
   }
 
   alert(

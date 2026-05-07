@@ -17,22 +17,23 @@ async function init() {
 
   //support running from within ultraviolet
   window.real_location = window.location;
-  if (window.__uv) {
+  if (window.__uv)
     window.real_location = __uv.location;
-  }
 
-  if ((/https?:\/\/edpuzzle.com\/(lms\/lti\/)?assignments\/[a-f0-9]{1,30}\/(watch|view)/).test(window.real_location.href)) {
+  if (
+    (/https?:\/\/edpuzzle.com\/(lms\/lti\/)?assignments\/[a-f0-9]{1,30}\/(watch|view)/).test(window.real_location.href)
+  ) {
     let response = await fetch(base_url + "/popup.html");
     open_popup(await response.text());
   }
-  else if (window.canvasReadyState) {
+  else if (window.canvasReadyState)
     handle_canvas_url();
-  }
-  else if (window.schoologyMoreLess) {
+  else if (window.schoologyMoreLess)
     handle_schoology_url();
-  }
   else {
-    alert("Please run this script on an Edpuzzle assignment. For reference, the URL should look like this:\nhttps://edpuzzle.com/assignments/{ASSIGNMENT_ID}/watch");
+    alert(
+      "Please run this script on an Edpuzzle assignment. For reference, the URL should look like this:\nhttps://edpuzzle.com/assignments/{ASSIGNMENT_ID}/watch"
+    );
   }
 }
 
@@ -43,8 +44,8 @@ function open_popup(html) {
     return;
   }
   write_popup(popup, html);
-  
-  async function popup_unload() { 
+
+  async function popup_unload() {
     let response = await fetch(base_url + "/popup.html", {cache: "no-cache"});
     if (popup.closed) return;
     write_popup(popup, await response.text());
@@ -77,11 +78,13 @@ async function handle_canvas_url() {
 
   let response1 = await fetch(url);
   let url2 = (await response1.json()).url;
-  
+
   let response2 = await fetch(url2);
   let url3 = (await response2.json()).url;
-  
-  alert(`Please re-run this script in the newly opened tab. If nothing happens after pressing "ok", then allow popups on Canvas and try again.`);
+
+  alert(
+    `Please re-run this script in the newly opened tab. If nothing happens after pressing "ok", then allow popups on Canvas and try again.`
+  );
   open(url3);
 }
 
@@ -91,15 +94,17 @@ async function handle_schoology_url() {
 
   let response = await fetch(url);
   let text = await response.text();
-  alert(`Please re-run this script in the newly opened tab. If nothing happens after pressing "ok", then allow popups on Schoology and try again.`);
+  alert(
+    `Please re-run this script in the newly opened tab. If nothing happens after pressing "ok", then allow popups on Schoology and try again.`
+  );
 
   //strip js tags from response and add to dom
-  let html = text.replace(/<script[\s\S]+?<\/script>/, ""); 
+  let html = text.replace(/<script[\s\S]+?<\/script>/, "");
   let div = document.createElement("div");
   div.innerHTML = html;
   let form = div.querySelector("form");
-  
-  let input = document.createElement("input")
+
+  let input = document.createElement("input");
   input.setAttribute("type", "hidden");
   input.setAttribute("name", "ext_submit");
   input.setAttribute("value", "Submit");

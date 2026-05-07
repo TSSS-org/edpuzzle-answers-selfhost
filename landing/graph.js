@@ -23,23 +23,22 @@ function init() {
 
   let url = "https://data.jsdelivr.com/v1/package/gh/ading2210/edpuzzle-answers/stats/";
   categories = ["year", "month", "week", "day"];
-  for (let i=0; i<categories.length; i++) {
+  for (let i = 0; i < categories.length; i++) {
     let category = categories[i];
-    httpRequest(url+category, function() {
+    httpRequest(url + category, function() {
       let stats = JSON.parse(this.responseText);
-      populateTable(i+1, stats, category);
-      if (category == "month") {
+      populateTable(i + 1, stats, category);
+      if (category == "month")
         drawGraph(stats);
-      }
     });
   }
 }
 
 function populateTable(col, stats, category) {
   let body = table.children[1].children;
-  body[0].children[col].innerHTML = `${stats.total.toLocaleString()}/${category}`; 
-  body[1].children[col].innerHTML = "#"+stats.rank.toLocaleString();
-  body[2].children[col].innerHTML = "#"+stats.typeRank.toLocaleString();
+  body[0].children[col].innerHTML = `${stats.total.toLocaleString()}/${category}`;
+  body[1].children[col].innerHTML = "#" + stats.rank.toLocaleString();
+  body[2].children[col].innerHTML = "#" + stats.typeRank.toLocaleString();
 }
 
 function drawGraph(stats) {
@@ -47,13 +46,13 @@ function drawGraph(stats) {
   let dateKeys = Object.keys(dates);
   let labels = [];
   let data = [];
-  for (let i=0; i<dateKeys.length; i++) {
+  for (let i = 0; i < dateKeys.length; i++) {
     let date = dateKeys[i];
     let dateSplit = date.split("-");
     labels.push(`${dateSplit[1]}/${dateSplit[2]}`);
     data.push(dates[date]);
   }
-  
+
   const chart = new Chart(ctx, {
     type: "line",
     data: {
@@ -64,7 +63,7 @@ function drawGraph(stats) {
         borderWidth: 1,
         borderColor: "#4C566A",
         pointBackgroundColor: "#4C566A",
-        pointRadius: 2,
+        pointRadius: 2
       }]
     },
     options: {
@@ -81,7 +80,7 @@ function drawGraph(stats) {
       },
       plugins: {
         legend: {
-          display: false,
+          display: false
         }
       }
     }

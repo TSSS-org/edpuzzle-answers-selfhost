@@ -14,14 +14,14 @@ const lti_edpuzzle = window.real_location.pathname.includes("/lms/lti");
 const csrf_cache = {
   latest: null,
   updated: 0
-}
+};
 
 const open_notice_button = document.getElementById("open-notice");
 const open_console_button = document.getElementById("open-console");
 
 const skipper_button = document.getElementById("skipper_button");
 const answers_button = document.getElementById("answers_button");
-const unfocus_checkbox = document.getElementById("unfocus_checkbox"); 
+const unfocus_checkbox = document.getElementById("unfocus_checkbox");
 const speed_button = document.getElementById("speed_button");
 const speed_dropdown = document.getElementById("speed_dropdown");
 const custom_speed_container = document.getElementById("custom_speed_container");
@@ -44,14 +44,13 @@ export var content_loaded = false;
 export var assignment_mode = null;
 var attachment_id = null;
 
-export function fetch_with_auth(url, options={}) {
+export function fetch_with_auth(url, options = {}) {
   if (edpuzzle_data && edpuzzle_data.token && (new URL(url).hostname) == "edpuzzle.com") {
-    if (!options.headers) {options.headers = {}}
+    if (!options.headers) options.headers = {};
     options.headers["authorization"] = edpuzzle_data.token;
   }
-  if (window.opener) {
+  if (window.opener)
     return opener.fetch(url, options);
-  }
   return fetch(url, options);
 }
 
@@ -59,17 +58,16 @@ export function sanitize_html(str) {
   return str.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
-export function get_template(id, flex=false) {
+export function get_template(id, flex = false) {
   let element = document.getElementById(id).cloneNode(true);
   element.removeAttribute("id");
   element.classList.remove("hidden");
-  if (flex) {
+  if (flex)
     element.classList.add("flex");
-  }
 
   element.placeholder = function(name) {
-    return element.querySelector(`*[key="${name}"]`)
-  }
+    return element.querySelector(`*[key="${name}"]`);
+  };
   return element;
 }
 
@@ -79,12 +77,10 @@ function fixed_length_int(int, length) {
 
 function get_assignment_id() {
   if (assignment) {
-    if (assignment_mode == "new") {
+    if (assignment_mode == "new")
       return assignment.assignmentLearner.assignmentId;
-    }
-    else {
+    else
       return assignment.teacherAssignments[0]._id;
-    }
   }
   else {
     let corrected_url = window.real_location.href.replace("/lms/lti", "");
@@ -93,8 +89,8 @@ function get_assignment_id() {
 }
 
 async function get_csrf() {
-  let now = Date.now()/1000;
-  if (!csrf_cache.latest ||  now - csrf_cache.updated > 60) {
+  let now = Date.now() / 1000;
+  if (!csrf_cache.latest || now - csrf_cache.updated > 60) {
     let csrf_url = "https://edpuzzle.com/api/v3/csrf";
     let request = await fetch_with_auth(csrf_url);
     let data = await request.json();
@@ -104,7 +100,7 @@ async function get_csrf() {
     return csrf;
   }
   else {
-    return csrf_cache.latest
+    return csrf_cache.latest;
   }
 }
 
@@ -115,8 +111,8 @@ export async function construct_headers() {
     "content-type": "application/json",
     "x-csrf-token": await get_csrf(),
     "x-edpuzzle-referrer": window.real_location.href,
-    "x-edpuzzle-web-version": edpuzzle_data.version,
-  }
+    "x-edpuzzle-web-version": edpuzzle_data.version
+  };
   if (lti_edpuzzle) {
     let lti_credentials = get_lti_credentials();
     headers["authorization"] = lti_credentials.user_token;
@@ -136,7 +132,7 @@ function get_lti_credentials() {
   return {
     lti_token: state.lti_learning2.ltiAccessToken,
     user_token: state.user.authToken
-  }
+  };
 }
 
 export async function get_attempt() {
@@ -144,7 +140,7 @@ export async function get_attempt() {
   let attempt_url;
   if (assignment_mode == "new") {
     let filtered = assignment.assignmentLearner.submissions.filter((submission) => {
-      return submission.attachmentId == attachment_id
+      return submission.attachmentId == attachment_id;
     });
     attempt_url = `https://edpuzzle.com/api/v3/learning/submissions/${filtered[0].id}`;
   }
@@ -161,15 +157,13 @@ export async function get_attempt() {
 async function get_assignment() {
   let assignment_id = get_assignment_id();
 
-  if (typeof assignment_id == "undefined") {
+  if (typeof assignment_id == "undefined")
     throw new Error("Could not infer the assignment ID. Are you on the correct URL?");
-  }
 
   let assignment_url = `https://edpuzzle.com/api/v3/assignments/${assignment_id}`;
   let response = await fetch_with_auth(assignment_url, {headers: await construct_headers()});
-  if (response.ok) {
+  if (response.ok)
     assignment_mode = "legacy";
-  }
   else {
     assignment_mode = "new";
     let me_url = "https://edpuzzle.com/api/v3/users/me";
@@ -193,7 +187,9 @@ function format_popup() {
 
   if (assignment_mode == "new") {
     if (!attachment_id) {
-      throw new Error(`You must be open to a video in the Edpuzzle tab.\n\nMake sure the page URL looks like this:\nhttps://edpuzzle.com/assignments/{ASSIGNMENT_ID}/watch?attachmentId={ATTACHMENT_ID}`);
+      throw new Error(
+        `You must be open to a video in the Edpuzzle tab.\n\nMake sure the page URL looks like this:\nhttps://edpuzzle.com/assignments/{ASSIGNMENT_ID}/watch?attachmentId={ATTACHMENT_ID}`
+      );
     }
     let filtered = assignment.assignment.attachments.filter((attachment) => {
       return attachment.id == attachment_id;
@@ -201,7 +197,9 @@ function format_popup() {
 
     media = filtered[0];
     if (media == null) {
-      throw new Error(`Could not find the assignment media.\n\nMake sure the page URL looks like this:\nhttps://edpuzzle.com/assignments/{ASSIGNMENT_ID}/watch?attachmentId={ATTACHMENT_ID}`);
+      throw new Error(
+        `Could not find the assignment media.\n\nMake sure the page URL looks like this:\nhttps://edpuzzle.com/assignments/{ASSIGNMENT_ID}/watch?attachmentId={ATTACHMENT_ID}`
+      );
     }
     teacher_assignment = assignment.assignmentLearner;
     thumbnail = media.thumbnailUrl;
@@ -214,17 +212,14 @@ function format_popup() {
     author_name = media.user.name;
   }
 
-  if (thumbnail.startsWith("/")) {
-    thumbnail = "https://"+window.real_location.hostname+thumbnail;
-  }
-  
+  if (thumbnail.startsWith("/"))
+    thumbnail = "https://" + window.real_location.hostname + thumbnail;
+
   let deadline_text;
-  if (teacher_assignment.dueDate == "") {
-    deadline_text = "No due date"
-  }
-  else {
-    deadline_text = "Due on "+(new Date(teacher_assignment.dueDate)).toDateString();
-  }
+  if (teacher_assignment.dueDate == "")
+    deadline_text = "No due date";
+  else
+    deadline_text = "Due on " + (new Date(teacher_assignment.dueDate)).toDateString();
 
   document.getElementById("title").innerHTML = `Answers for: ${media.title}`;
   document.getElementById("assignment_title").innerHTML = media.title;
@@ -254,7 +249,7 @@ async function get_media() {
   }
 
   questions = media.questions;
-  return questions
+  return questions;
 }
 
 //associates user responses with their corresponding questions.
@@ -267,9 +262,8 @@ async function get_responses(questions) {
         break;
       }
     }
-    if (!question.response) {
+    if (!question.response)
       question.response = null;
-    }
   }
   return questions;
 }
@@ -287,34 +281,33 @@ async function get_questions() {
       if (choice.isCorrect) {
         correct_found = true;
         break;
-      };
+      }
     }
     if (!correct_found) {
-      throw new Error("Some questions have invalid data. The assignment might be a private one, so the answers cannot be extracted.");
+      throw new Error(
+        "Some questions have invalid data. The assignment might be a private one, so the answers cannot be extracted."
+      );
     }
   }
 }
 
 //display the questions onto the popup
 function parse_questions() {
-  if (questions == null) {
-    throw new Error("Failed to fetch the questions for this assignment.")
-  }
-  
+  if (questions == null)
+    throw new Error("Failed to fetch the questions for this assignment.");
+
   //sort the questions by time
   questions.sort((a, b) => a.time - b.time);
 
   for (let question of questions) {
-    let min = fixed_length_int(Math.floor(question.time/60), 2);
-    let secs = fixed_length_int(Math.floor(question.time%60), 2);
+    let min = fixed_length_int(Math.floor(question.time / 60), 2);
+    let secs = fixed_length_int(Math.floor(question.time % 60), 2);
     let timestamp = `[${min}:${secs}]`;
 
-    if (question.body[0].text != "") {
+    if (question.body[0].text != "")
       question.title = `<p>${question.body[0].text}</p>`;
-    }
-    else {
+    else
       question.title = question.body[0].html;
-    }
 
     let table = get_template("question_template");
     table.placeholder("timestamp").innerHTML = timestamp;
@@ -325,15 +318,12 @@ function parse_questions() {
       let choice_template = choices_list.placeholder("question_choice");
       for (let choice of question.choices) {
         let list_item = choice_template.cloneNode(true);
-        if (choice.isCorrect) {
+        if (choice.isCorrect)
           list_item.classList.add("underline");
-        }
-        if (choice.body[0].text != "") {
+        if (choice.body[0].text != "")
           list_item.innerHTML = `<p>${choice.body[0].text}</p>`;
-        }
-        else {
+        else
           list_item.innerHTML = `${choice.body[0].html}`;
-        }
         choices_list.append(list_item);
       }
       choice_template.remove();
@@ -345,23 +335,22 @@ function parse_questions() {
       let submit_button = question_div.placeholder("submit_button");
       let question_textarea = question_div.placeholder("question_textarea");
       let buttons_div = question_div.placeholder("buttons_div");
-      
+
       if (question.response) {
         question_textarea.innerHTML = question.response.body[0].text;
         question_textarea.disabled = true;
         buttons_div.classList.add("hidden");
       }
       else {
-        generate_button.onclick = function(){
+        generate_button.onclick = function() {
           let menu = new open_ended.OpenEndedMenu(question, question_div);
           menu.open_menu();
         };
-        submit_button.onclick = async function(){
-          let success = await open_ended.submit_button_callback(question_textarea.value.trim(), question)
-          if (success) {
+        submit_button.onclick = async function() {
+          let success = await open_ended.submit_button_callback(question_textarea.value.trim(), question);
+          if (success)
             buttons_div.remove();
-          }
-        }
+        };
       }
 
       table.placeholder("question_content").append(question_div);
@@ -373,9 +362,8 @@ function parse_questions() {
   content_loaded = true;
 
   skipper_button.disabled = false;
-  if (questions.length == 0) {
+  if (questions.length == 0)
     status_text.innerHTML = "No valid multiple choice questions were found.";
-  }
   else {
     status_text.classList.add("hidden");
     answers_button.disabled = false;
@@ -390,18 +378,20 @@ function open_copyright_notice() {
     gpl_popup.document.head.innerHTML = `<title>edpuzzle-answers: Copyright Notice</title>`;
     gpl_popup.document.body.innerHTML = `
       <pre style="font-size: 12px; white-space: pre-wrap">${text}</pre>
-    `;  
+    `;
   }, 500);
 }
 
 function textarea_initialize(textarea) {
   textarea_update_height(textarea);
-  textarea.addEventListener("input", function(){textarea_update_height(textarea)});
+  textarea.addEventListener("input", function() {
+    textarea_update_height(textarea);
+  });
   let old_width;
-  new ResizeObserver(function(changes){
+  new ResizeObserver(function(changes) {
     for (let change of changes) {
-      if (change.contentRect.width === old_width) {return}
-      old_width = change.contentRect.width
+      if (change.contentRect.width === old_width) return;
+      old_width = change.contentRect.width;
       textarea_update_height(textarea);
     }
   }).observe(textarea);
@@ -413,13 +403,13 @@ function textarea_initialize(textarea) {
       textarea_update_height(textarea);
       old_descriptor.set.call(textarea, value);
     }
-  })
+  });
 }
 
 function textarea_update_height(textarea) {
   textarea.style.marginBottom = textarea.style.height;
   textarea.style.height = 0;
-  textarea.style.height = textarea.scrollHeight+"px";
+  textarea.style.height = textarea.scrollHeight + "px";
   textarea.style.marginBottom = 0;
 }
 
@@ -427,13 +417,11 @@ function mutation_observer_callback(mutations_list) {
   for (let mutation of mutations_list) {
     if (mutation.type == "childList") {
       for (let added_node of mutation.addedNodes) {
-        if (added_node instanceof Text && added_node.parentNode && added_node.parentNode.tagName == "TEXTAREA") {
+        if (added_node instanceof Text && added_node.parentNode && added_node.parentNode.tagName == "TEXTAREA")
           textarea_update_height(added_node.parentNode);
-        }
         else if (added_node instanceof HTMLElement) {
-          for (let textarea of added_node.getElementsByTagName("textarea")) {
+          for (let textarea of added_node.getElementsByTagName("textarea"))
             textarea_initialize(textarea);
-          }
         }
       }
     }
@@ -443,26 +431,24 @@ function mutation_observer_callback(mutations_list) {
 function intercept_console() {
   let function_names = ["log", "debug", "info", "warn", "error"];
   for (let key of function_names) {
-    console[key+"_"] = console[key].bind(console);
+    console[key + "_"] = console[key].bind(console);
     console[key] = function() {
       let log_entry = {
         message: arguments[0] || "",
         type: key
-      }
-      if (arguments.length > 0) {
+      };
+      if (arguments.length > 0)
         console_log.push(log_entry);
-      }
-      if (console_popup) {
+      if (console_popup)
         display_console_message(log_entry);
-      }
 
-      return console[key+"_"](...arguments);
-    }
+      return console[key + "_"](...arguments);
+    };
   }
 }
 
 async function load_console_html() {
-  let url = base_url+"/console.html";
+  let url = base_url + "/console.html";
   console.log(`Loading ${url}`);
   let request = await fetch_with_auth(url);
 
@@ -474,48 +460,43 @@ async function load_console_html() {
 }
 
 function open_console() {
-  if (console_popup) {
+  if (console_popup)
     console_popup.close();
-  }
 
   console_popup = window.open("about:blank", "", "width=500, height=500");
   console_popup.document.write(console_html);
-  for (let element of document.getElementsByTagName("style")) {
+  for (let element of document.getElementsByTagName("style"))
     console_popup.document.head.append(element.cloneNode(true));
-  }
-  
+
   let js_textarea = console_popup.document.getElementById("js_input");
   js_textarea.onkeydown = function(event) {
     if (event.code == "Enter" && !event.shiftKey) {
       event.preventDefault();
-      if (js_textarea.value === ""){
+      if (js_textarea.value === "")
         return;
-      }  
       let command = js_textarea.value;
       js_textarea.value = "";
       let message = {
         message: eval(command),
         type: "eval"
-      }
+      };
       add_console_message(message);
     }
-  }
+  };
 
-  console_popup.onbeforeunload = function(){
-    setTimeout(function(){
+  console_popup.onbeforeunload = function() {
+    setTimeout(function() {
       console_popup.close();
-    }, 200)
-  }
-  
-  for (let log_entry of console_log) {
+    }, 200);
+  };
+
+  for (let log_entry of console_log)
     display_console_message(log_entry);
-  }
 }
 
 function add_console_message(log_entry) {
-  if (console_popup) {
+  if (console_popup)
     display_console_message(log_entry);
-  }
 }
 
 function display_console_message(log_entry) {
@@ -526,7 +507,7 @@ function display_console_message(log_entry) {
     log: "bg-slate-900",
     warn: "bg-yellow-700",
     error: "bg-red-800"
-  }
+  };
 
   let table_container = console_popup.document.getElementById("table_container");
   let console_table = console_popup.document.getElementById("console_table");
@@ -535,12 +516,10 @@ function display_console_message(log_entry) {
   let text_cell = console_popup.document.createElement("td");
 
   let message = log_entry.message;
-  if (typeof message == "object") {
+  if (typeof message == "object")
     message = JSON.stringify(message);
-  }
-  else if (typeof message != "string") {
-    message = message+"";
-  }
+  else if (typeof message != "string")
+    message = message + "";
 
   type_cell.innerHTML = log_entry.type;
   text_cell.innerHTML = sanitize_html(message).replaceAll("\n", "<br>");
@@ -555,9 +534,8 @@ function display_console_message(log_entry) {
 }
 
 function on_before_unload() {
-  if (console_popup) {
+  if (console_popup)
     console_popup.close();
-  }
 }
 
 function on_error(error_old, url, line, col, error) {
@@ -565,17 +543,27 @@ function on_error(error_old, url, line, col, error) {
   let message = {
     message: error_text,
     type: "error"
-  }
-  add_console_message(message)
+  };
+  add_console_message(message);
 }
 
 open_notice_button.addEventListener("click", open_copyright_notice);
 open_console_button.addEventListener("click", open_console);
-unfocus_checkbox.addEventListener("change", () => {video_options.toggle_unfocus()});
-speed_dropdown.addEventListener("change", () => {video_options.video_speed()});
-skipper_button.addEventListener("click", () => {video_skipper.skip_video()});
-answers_button.addEventListener("click", () => {auto_answers.answer_questions()});
-custom_speed.addEventListener("input", () => {video_options.video_speed()})
+unfocus_checkbox.addEventListener("change", () => {
+  video_options.toggle_unfocus();
+});
+speed_dropdown.addEventListener("change", () => {
+  video_options.video_speed();
+});
+skipper_button.addEventListener("click", () => {
+  video_skipper.skip_video();
+});
+answers_button.addEventListener("click", () => {
+  auto_answers.answer_questions();
+});
+custom_speed.addEventListener("input", () => {
+  video_options.video_speed();
+});
 
 async function init() {
   intercept_console();
@@ -585,13 +573,12 @@ async function init() {
 
   console.log(gpl_text);
   load_console_html();
-  if (lti_edpuzzle) 
+  if (lti_edpuzzle)
     console.log("Detected new type LTI assignment");
 
   let textarea_list = document.getElementsByTagName("textarea");
-  for (let textarea of textarea_list) {
+  for (let textarea of textarea_list)
     textarea_initialize(textarea);
-  }
 
   let observer = new MutationObserver(mutation_observer_callback);
   observer.observe(document.getRootNode(), {childList: true, subtree: true});
@@ -605,7 +592,7 @@ async function init() {
   catch (error) {
     console.error(error + "");
     console.error(error.stack);
-    status_text.innerText = `An error has occurred. Please check the JS console for more details.\n\n${error+""}`;
+    status_text.innerText = `An error has occurred. Please check the JS console for more details.\n\n${error + ""}`;
   }
 }
 

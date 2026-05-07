@@ -1,11 +1,11 @@
 //Copyright (C) 2023 ading2210
 //see README.md for more information
 
-import { fetch_with_auth, content_loaded, construct_headers, get_attempt, assignment_mode } from "./main.js";
+import { assignment_mode, construct_headers, content_loaded, fetch_with_auth, get_attempt } from "./main.js";
 
-skipper_button.disabled = !content_loaded; 
+skipper_button.disabled = !content_loaded;
 
-export async function skip_video(attempt=null, update_button=true) {
+export async function skip_video(attempt = null, update_button = true) {
   if (update_button) {
     skipper_button.value = "Skipping video...";
     skipper_button.disabled = true;
@@ -22,11 +22,10 @@ export async function skip_video(attempt=null, update_button=true) {
 
 async function post_watchtime(attempt) {
   let id = attempt._id || attempt.id;
-  
+
   let watch_url = `https://edpuzzle.com/api/v4/media_attempts/${id}/watch`;
-  if (assignment_mode === "new") {
+  if (assignment_mode === "new")
     watch_url = `https://edpuzzle.com/api/v3/learning/time_intervals/submission/${id}/watch`;
-  }
 
   let content = {"timeIntervalNumber": 10};
   await fetch_with_auth(watch_url, {
