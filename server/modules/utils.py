@@ -3,6 +3,7 @@
 
 from modules import exceptions
 import traceback
+import functools
 
 exception_dict = {
   "BadRequestError": 400,
@@ -24,7 +25,7 @@ type_dict = {
 include_traceback = False
 
 #convert an exception into a flask response
-def handle_exception(exception, debug=None, status_code=None):
+def create_exception_response(exception, debug=None, status_code=None):
   if isinstance(exception, Exception):
     message = str(exception)
     exception_type = exception.__class__.__name__
@@ -50,3 +51,12 @@ def handle_exception(exception, debug=None, status_code=None):
       "error": "Unknown",
       "status": 500
     }, 500
+
+def handle_exception(func):
+  @functools.wraps(func)
+  def decorator(*args, **kwargs):
+    try:
+      return func(*args, **kwargs)
+    except Exception as e:
+      return create_exception_response(e)
+  return decorator

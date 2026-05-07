@@ -165,88 +165,80 @@ def handle_rate_limit(e):
 @app.route("/api/captions/<id>")
 @app.route("/api/captions/<id>/<language>")
 @limiter.limit(config["rate_limit"]["captions"])
+@utils.handle_exception
 def get_captions(id, language="en"):
-  try:
-    timestamp = request.args.get("timestamp")
-    count = request.args.get("count")
-    return captions.get_captions(id)
-  except Exception as e:
-    return utils.handle_exception(e)
+  timestamp = request.args.get("timestamp")
+  count = request.args.get("count")
+  return captions.get_captions(id)
 
 @app.route("/api/models", methods=["GET"])
+@utils.handle_exception
 def get_models():
   return jsonify(ai.get_available_models())
 
 @app.route("/api/generate", methods=["POST"])
 @limiter.limit(config["rate_limit"]["generate"])
+@utils.handle_exception
 def generate():
-  try:
-    data = request.json
+  data = request.json
 
-    if not "prompt" in data:
-      raise exceptions.BadRequestError("Missing required parameter 'prompt'.")
+  if not "prompt" in data:
+    raise exceptions.BadRequestError("Missing required parameter 'prompt'.")
 
-    for arg in data:
-      if not arg in ["prompt", "model"]:
-        raise exceptions.BadRequestError(f"Unknown parameter '{arg}'.")
+  for arg in data:
+    if not arg in ["prompt", "model"]:
+      raise exceptions.BadRequestError(f"Unknown parameter '{arg}'.")
 
-    if len(data["prompt"]) > ai.max_length:
-      raise exceptions.BadRequestError("Prompt too long.")
-    
-    if not "model" in data:
-      raise exceptions.BadRequestError("Missing required parameter 'model'.")
+  if len(data["prompt"]) > ai.max_length:
+    raise exceptions.BadRequestError("Prompt too long.")
+  
+  if not "model" in data:
+    raise exceptions.BadRequestError("Missing required parameter 'model'.")
 
-    def generator():
-      try:
-        for chunk in ai.generate(data):
-          if chunk == data["prompt"]:
-            continue
-          yield json.dumps(chunk) + "\n"
-      except Exception as e:
-        exception = utils.handle_exception(e)[0]
-        exception["status_code"] = exception["status"]
-        exception["status"] = "error"
-        yield json.dumps(exception)
+  def generator():
+    try:
+      for chunk in ai.generate(data):
+        if chunk == data["prompt"]:
+          continue
+        yield json.dumps(chunk) + "\n"
+    except Exception as e:
+      exception = utils.handle_exception(e)[0]
+      exception["status_code"] = exception["status"]
+      exception["status"] = "error"
+      yield json.dumps(exception)
 
-    return Response(
-      generator(),
-      content_type="text/event-stream",
-      headers={"X-Accel-Buffering": "no"},
-    )
-
-  except Exception as e:
-    return utils.handle_exception(e)
+  return Response(
+    generator(),
+    content_type="text/event-stream",
+    headers={"X-Accel-Buffering": "no"},
+  )
 
 @app.route("/api/media/<media_id>")
 @limiter.limit(config["rate_limit"]["media"])
+@utils.handle_exception
 def media_proxy(media_id):
-  try:
-    session = create_session()
+  session = create_session()
 
-    current_token = random.choice(list(current_tokens.values()))
-    session.cookies.update({
-      "token": current_token[0]
-    })
-    csrf_token = session.get("https://edpuzzle.com/api/v3/csrf").json()
+  current_token = random.choice(list(current_tokens.values()))
+  session.cookies.update({
+    "token": current_token[0]
+  })
+  csrf_token = session.get("https://edpuzzle.com/api/v3/csrf").json()
 
-    res = session.get(f"https://edpuzzle.com/api/v3/media/{media_id}", cookies= {
-      "edpuzzleCSRF": csrf_token["CSRFToken"]
-    })
+  res = session.get(f"https://edpuzzle.com/api/v3/media/{media_id}", cookies= {
+    "edpuzzleCSRF": csrf_token["CSRFToken"]
+  })
 
-    if res.status_code == 403:
-      raise exceptions.BadGatewayError(f"Got status code 403 from Edpuzzle.\n\nThis means that the Edpuzzle assignment is private, so it is impossible to find the answers.")
-    if res.status_code != 200:
-      raise exceptions.BadGatewayError(f"Got status code {res.status_code} from Edpuzzle")
+  if res.status_code == 403:
+    raise exceptions.BadGatewayError(f"Got status code 403 from Edpuzzle.\n\nThis means that the Edpuzzle assignment is private, so it is impossible to find the answers.")
+  if res.status_code != 200:
+    raise exceptions.BadGatewayError(f"Got status code {res.status_code} from Edpuzzle")
 
-    data = res.json()
-    if data.get("error"):
-      raise exceptions.BadGatewayError(f"Edpuzzle error: " + data["error"])
+  data = res.json()
+  if data.get("error"):
+    raise exceptions.BadGatewayError(f"Edpuzzle error: " + data["error"])
 
-    return jsonify(data)
-
-  except Exception as e:
-    return utils.handle_exception(e)
-
+  return jsonify(data)
 
 @app.route("/")
 def homepage():
