@@ -18,6 +18,13 @@ Discord server: [edpuzzle.hgci.org/discord.html](https://edpuzzle.hgci.org/disco
 
 _This is a paid advertisement. If you want to sponsor this project and advertise your own service, please contact me on Discord._
 
+## To run the server locally
+
+1. open a terminal in the root of the repo
+2. do ```python3 setup.py``` for macos and linux. For windows do ```python setup.py```
+3. just follow the setup script and every time you need to use it just run that same script again.
+### you can say no to the gemini api key but the option to generate answers for open ended questions wont work.
+
 ## Contents:
 
 - [Demo](#demo)
