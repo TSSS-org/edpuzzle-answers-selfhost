@@ -1,4 +1,4 @@
-# Copyright (C) 2023 ading2210
+# Copyright (C) 2026 ading2210
 # see README.md for more information
 
 from flask import Flask, redirect, request, Response, render_template, jsonify
@@ -9,25 +9,20 @@ from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.serving import is_running_from_reloader
 from curl_cffi import requests
-import random
+from playwright.sync_api import sync_playwright
 
 from modules import exceptions, utils, captions, ai
-import threading, time, json, os, hashlib, re
+import threading, time, json, os
 import pathlib
 
 # ===== setup flask =====
 print("Reading config...")
 base_dir = pathlib.Path(__file__).resolve().parent
 config_path = base_dir / "config" / "config.json"
-cache_path = base_dir / "cache" / "cache.json"
 
 config = json.loads(config_path.read_text())
-cache = None
-cache_path.parent.mkdir(exist_ok=True, parents=True)
-if cache_path.exists():
-  cache = json.loads(cache_path.read_text())
 
-#read config
+# read config
 utils.include_traceback = config["include_traceback"]
 ai.config = config
 
@@ -54,26 +49,72 @@ CORS(app)
 if config["behind_proxy"]:
   app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-# ===== tokens =====
+# ===== token management =====
 
-current_tokens = {}
+# lock so only one playwright login can run at a time
+_token_lock = threading.Lock()
 
-#process cache
-if cache:
-  current_tokens = cache["tokens"]
-  for email, item in list(current_tokens.items()):
-    for creds in config["teacher_creds"]:
-      if creds["username"] == email:
-        break
-    else:
-      del current_tokens[email]
+def save_token(token):
+  """Save a token back to config.json so it persists across restarts."""
+  config["teacher_token"] = token
+  config_path.write_text(json.dumps(config, indent=2))
 
-def write_cache():
-  global cache
-  cache = {
-    "tokens": current_tokens
-  }
-  cache_path.write_text(json.dumps(cache, indent=2))
+def get_teacher_token():
+  """
+  Open a real visible Chromium window so the user can log into their teacher
+  account manually. Once the login cookie appears, grab it and save it.
+  This bypasses the captcha entirely because a real human is doing the login.
+  """
+  with _token_lock:
+    print("\n" + "="*50)
+    print("  TEACHER LOGIN REQUIRED")
+    print("="*50)
+    print("A browser window will open. Log into your Edpuzzle")
+    print("teacher account. The window will close automatically")
+    print("once you're signed in.")
+    print("="*50 + "\n")
+
+    with sync_playwright() as p:
+      browser = p.chromium.launch(headless=False, args=["--no-sandbox"])
+      context = browser.new_context()
+      page = context.new_page()
+      page.goto("https://edpuzzle.com/login")
+
+      # Wait until we navigate away from /login — means login succeeded.
+      # We can't use document.cookie because the token cookie is HttpOnly
+      # and invisible to JavaScript, so we watch the URL instead.
+      try:
+        page.wait_for_url(
+          lambda url: "edpuzzle.com/login" not in url,
+          timeout=180_000
+        )
+      except Exception:
+        browser.close()
+        raise RuntimeError("Login timed out after 3 minutes. Please restart and try again.")
+
+      # Small wait to let Edpuzzle finish setting all cookies after redirect
+      page.wait_for_timeout(2000)
+
+      cookies = context.cookies()
+      token = next((c["value"] for c in cookies if c["name"] == "token"), None)
+      browser.close()
+
+    if not token:
+      raise RuntimeError("Could not find token cookie after login. Please try again.")
+
+    print("Teacher token captured successfully.")
+    save_token(token)
+    return token
+
+def get_current_token():
+  """
+  Return the stored teacher token from config.
+  If it's missing or empty, trigger the Playwright login flow.
+  """
+  token = config.get("teacher_token", "").strip()
+  if not token or token == "YOUR_TOKEN_HERE":
+    token = get_teacher_token()
+  return token
 
 def create_session():
   session = requests.Session(impersonate="chrome")
@@ -86,73 +127,22 @@ def create_session():
   })
   return session
 
-def account_login(creds):
+def verify_token(token):
+  """Check if the stored token is still valid against Edpuzzle's API."""
   session = create_session()
-  username = creds["username"]
+  res = session.get("https://edpuzzle.com/api/v3/users/me", cookies={"token": token})
+  return res.ok
 
-  # check if our current token is ok
-  current_token = current_tokens.get(username)
-  if current_token and time.time() - current_token[1] < 6 * 3600:
-    res = session.get("https://edpuzzle.com/api/v3/users/me", cookies={
-      "token": current_token[0]
-    })
-
-    if res.ok:
-      return current_token[0]
-    print(f"token probably expired for {username}")
-
-  # Anti-cheat stuff
-  home_res = session.get("https://edpuzzle.com/")  # get csrf cookie and later anti-bot test
-  payload = {
-    "username": creds["username"],
-    "password": creds["password"],
-    "role": "teacher",
-  }
-
-  # CSRF
-  csrf_res = session.get("https://edpuzzle.com/api/v3/csrf")
-  csrf_token = csrf_res.json()["CSRFToken"]
-  session.headers["X-Csrf-Token"] = csrf_token
-
-  # Web version anti-bot
-  # Credits to https://github.com/VillainsRule/Narwhal/blob/master/narwhal/narwhal.ts
-  # Explanation: this seems to generate a hash from the main edpuzzle.com page which is disguised as the version
-  md5 = hashlib.md5()
-  md5.update(json.dumps(payload, separators=(",", ":")).encode())
-  md5 = md5.hexdigest()[:4]
-
-  decoded = home_res.text.replace(" ", "")
-  part = re.search(r'version:"(.*?)",', decoded).group(1)
-  multiplier = int(part.split(".")[2]) + 10
-
-  anti_cheat_token = int(time.time()) * multiplier
-  session.headers["X-Edpuzzle-Web-Version"] = f"{part}.{md5}{anti_cheat_token}"
-
-  login_res = session.post(
-    "https://edpuzzle.com/api/v3/users/login",
-    data=json.dumps(payload, separators=(",", ":")),
-    headers={
-      "Content-Type": "application/json"
-    }
-  )
-  if not login_res.ok:
-    print(f"warning: auth failed for {username}")
-    if username in current_tokens:
-      del current_tokens[username]
-    return
-
-  print(f"login success for {username}")
-  now = int(time.time())
-  current_tokens[username] = login_res.cookies.get("token"), now
-  write_cache()
-
-def token_refresher():
-  write_cache()
-  while True:
-    for creds in config["teacher_creds"]:
-      account_login(creds)
-      time.sleep(30) #30s between login attempts
-    time.sleep(60*10) # 10 min
+def ensure_valid_token():
+  """
+  Return a working token, re-authenticating via Playwright if the current
+  one has expired (401) or been rejected (403).
+  """
+  token = get_current_token()
+  if not verify_token(token):
+    print("Stored token is invalid or expired. Re-authenticating...")
+    token = get_teacher_token()
+  return token
 
 # ===== utility functions =====
 
@@ -191,7 +181,7 @@ def generate():
 
   if len(data["prompt"]) > ai.max_length:
     raise exceptions.BadRequestError("Prompt too long.")
-  
+
   if not "model" in data:
     raise exceptions.BadRequestError("Missing required parameter 'model'.")
 
@@ -218,25 +208,46 @@ def generate():
 @utils.handle_exception
 def media_proxy(media_id):
   session = create_session()
+  token = get_current_token()
 
-  current_token = random.choice(list(current_tokens.values()))
-  session.cookies.update({
-    "token": current_token[0]
-  })
-  csrf_token = session.get("https://edpuzzle.com/api/v3/csrf").json()
+  session.cookies.update({"token": token})
+  csrf_res = session.get("https://edpuzzle.com/api/v3/csrf")
+  csrf_token = csrf_res.json()["CSRFToken"]
 
-  res = session.get(f"https://edpuzzle.com/api/v3/media/{media_id}", cookies= {
-    "edpuzzleCSRF": csrf_token["CSRFToken"]
-  })
+  res = session.get(
+    f"https://edpuzzle.com/api/v3/media/{media_id}",
+    cookies={"edpuzzleCSRF": csrf_token}
+  )
 
+  # Token expired or rejected — re-authenticate and retry once
+  if res.status_code in (401, 403):
+    print(f"Got {res.status_code} from Edpuzzle on media request. Re-authenticating...")
+    token = get_teacher_token()
+    session.cookies.update({"token": token})
+    csrf_res = session.get("https://edpuzzle.com/api/v3/csrf")
+    csrf_token = csrf_res.json()["CSRFToken"]
+    res = session.get(
+      f"https://edpuzzle.com/api/v3/media/{media_id}",
+      cookies={"edpuzzleCSRF": csrf_token}
+    )
+
+  # If still failing after re-auth, give a clear error
   if res.status_code == 403:
-    raise exceptions.BadGatewayError(f"Got status code 403 from Edpuzzle.\n\nThis means that the Edpuzzle assignment is private, so it is impossible to find the answers.")
+    raise exceptions.BadGatewayError(
+      "Got status code 403 from Edpuzzle.\n\n"
+      "This means the assignment is private, so it is impossible to find the answers."
+    )
+  if res.status_code == 401:
+    raise exceptions.BadGatewayError(
+      "Got status code 401 from Edpuzzle after re-authentication. "
+      "Please restart the server and log in again."
+    )
   if res.status_code != 200:
-    raise exceptions.BadGatewayError(f"Got status code {res.status_code} from Edpuzzle")
+    raise exceptions.BadGatewayError(f"Got status code {res.status_code} from Edpuzzle.")
 
   data = res.json()
   if data.get("error"):
-    raise exceptions.BadGatewayError(f"Edpuzzle error: " + data["error"])
+    raise exceptions.BadGatewayError("Edpuzzle error: " + data["error"])
 
   return jsonify(data)
 
@@ -247,15 +258,16 @@ def homepage():
 @app.route("/discord")
 @app.route("/discord.html")
 def discord():
-  invite_url = f"https://discord.com/invite/5kmVs8AqDQ"
-  return redirect(invite_url)
+  return redirect("https://discord.com/invite/5kmVs8AqDQ")
 
 
 # run the server
 if __name__ == "__main__":
   if not is_running_from_reloader():
-    t = threading.Thread(target=token_refresher, daemon=True)
-    t.start()
+    # Validate token on startup — opens browser immediately if missing/expired
+    print("Checking teacher token...")
+    ensure_valid_token()
+    print("Token OK. Starting server...")
 
   print("Starting flask...")
   app.run(

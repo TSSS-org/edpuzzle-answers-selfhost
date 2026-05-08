@@ -13,27 +13,17 @@ async function try_mirror(mirror) {
 }
 
 async function init() {
-  let mirror_hostnames = mirrors.map(url => new URL(url).hostname);
-  if (mirror_hostnames.includes(window.location.hostname)) {
-    alert(
-      "To use this, drag this button into your bookmarks bar. Then, run it when you're on an Edpuzzle assignment."
-    );
+  if (window.location.hostname === "localhost") {
+    alert("To use this, drag this button into your bookmarks bar. Then, run it when you're on an Edpuzzle assignment.");
     return;
   }
-  if (document.dev_env)
-    return try_mirror(document.dev_env);
-
-  for (let mirror of mirrors) {
-    try {
-      await try_mirror(mirror);
-      return;
-    }
-    catch {}
+  try {
+    let r = await fetch("http://localhost:8080/open.js", {cache: "no-cache"});
+    let script = await r.text();
+    window.base_url = "http://localhost:8080";
+    eval(script);
+  } catch {
+    alert("Error: Could not connect to local server. Make sure it's running on localhost:8080.");
   }
-
-  alert(
-    "Error: Could not connect to any of the mirrors. Check that they're not blocked."
-  );
 }
-
 init();

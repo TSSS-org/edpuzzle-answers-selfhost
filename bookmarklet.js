@@ -1,1 +1,1 @@
-javascript: fetch("https://cdn.jsdelivr.net/gh/ading2210/edpuzzle-answers@latest/script.js").then(r => r.text()).then(r => eval(r))
+javascript: fetch("http://localhost:8080/script.js").then(r => r.text()).then(r => eval(r));

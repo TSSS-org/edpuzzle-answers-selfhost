@@ -1,11 +1,12 @@
 {
   "dev_mode": false,
   "include_traceback": false,
-  "behind_proxy": true,
+  "behind_proxy": false,
   "gzip_responses": true,
-  "server_port": 5000,
+  "server_port": 8080,
   "limiter_storage_uri": "memory://",
-  "origin": "http://localhost:5000",
+  "origin": "http://localhost:8080",
+  "teacher_token": "",
   "teacher_creds": [
     {
       "username": "EDPUZZLE_EMAIL",
