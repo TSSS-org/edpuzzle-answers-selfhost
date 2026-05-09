@@ -60,6 +60,9 @@ def get_venv_playwright():
     return os.path.join(VENV_DIR, "bin", "playwright")
 
 def run(cmd, **kwargs):
+    # On Windows, 'npm' must be called as 'npm.cmd' when not using shell=True
+    if IS_WINDOWS and cmd[0] == "npm":
+        cmd[0] = "npm.cmd"
     return subprocess.run(cmd, **kwargs)
 
 def ask(prompt, default=None):
