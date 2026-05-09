@@ -35,13 +35,13 @@ def cyan(t):  return c(t, "96")
 
 def print_logo():
     logo = f"""
-{cyan(bold("      ______     __                            __   "))}
-{cyan(bold("     / ____/____/ /___  __  __________  ____  / /__ "))}
-{cyan(bold("    / __/ / __  / __  / / / / /_  /_  / / __ \\/ / _ \\"))}
-{cyan(bold("   / /___/ /_/ / /_/ / /_/ / / /_  / /_/ /_/ / /  __/"))}
-{cyan(bold("  /_____/\\__,_/\\__,_/\\__,_/ /___/ /___/ .___/_/\\___/ "))}
-{cyan(bold("                                     /_/             "))}
-{yellow("               Self-Hosted Setup Helper v2.0")}
+{cyan(bold("___________    .___                           .__                      _____                                              "))}
+{cyan(bold(r"\_   _____/  __| _/_____  __ _________________|  |   ____             /  _  \   ____   ________  _  __ ___________  ______"))}
+{cyan(bold(r" |    __)_  / __ |\____ \|  |  \___   /\___   /  | _/ __ \   ______  /  /_\  \ /    \ /  ___/\ \/ \/ // __ \_  __ \/  ___/"))}
+{cyan(bold(r" |        \/ /_/ ||  |_> >  |  //    /  /    /|  |_\  ___/  /_____/ /    |    \   |  \\___ \  \     /\  ___/|  | \/\___ \ "))}
+{cyan(bold(r"/_______  /\____ ||   __/|____//_____ \/_____ \____/\___  >         \____|__  /___|  /____  >  \/\_/  \___  >__|  /____  >"))}
+{cyan(bold(r"        \/      \/|__|               \/      \/         \/                  \/     \/     \/              \/           \/ "))}
+{yellow(r"                                                    Self-Hosted Setup Helper v2.0")}
     """
     print(logo)
 
@@ -142,15 +142,26 @@ def port_in_use(port):
 # ===== tester / developer actions =====
 def nuke_local_env():
     header("Cleaning Environment")
-    to_delete = [VENV_DIR, "node_modules", "dist", "server/config", "__pycache__"]
-    for folder in to_delete:
+    
+    # 1. Delete all the generated folders (Removed "server/config" from this list)
+    to_delete_folders = [VENV_DIR, "node_modules", "dist", "__pycache__"]
+    for folder in to_delete_folders:
         path = os.path.join(BASE_DIR, folder)
         if os.path.exists(path):
             try:
                 shutil.rmtree(path)
                 ok(f"Deleted {folder}")
             except Exception as e:
-                warn(f"Could not delete {folder}: {e}")
+                warn(f"Could not delete folder {folder}: {e}")
+
+    # 2. Delete ONLY the config.json file, leaving default.json alone
+    if os.path.exists(CONFIG_PATH):
+        try:
+            os.remove(CONFIG_PATH)
+            ok("Deleted config.json")
+        except Exception as e:
+            warn(f"Could not delete config.json: {e}")
+
     print()
     ok("Clean slate achieved! Starting fresh setup...")
     time.sleep(1)
