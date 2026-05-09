@@ -186,7 +186,21 @@ def check_dependencies():
         sys.exit(1)
     ok(f"Python {major}.{minor} detected")
 
+    # Check for Node.js and npm, and auto-install on Linux if missing
     node = shutil.which("node")
+    npm = shutil.which("npm")
+    
+    if not node or not npm:
+        if platform.system() == "Linux" and shutil.which("apt"):
+            info("Node.js or npm is missing. Attempting to install via apt...")
+            print(yellow("  You may be prompted for your sudo password."))
+            subprocess.run(["sudo", "apt", "update"])
+            subprocess.run(["sudo", "apt", "install", "-y", "nodejs", "npm"])
+            
+            # Re-check to see if the installation succeeded
+            node = shutil.which("node")
+            npm = shutil.which("npm")
+
     if not node:
         err("Node.js is not installed.")
         err("Download it from https://nodejs.org (npm is included)")
@@ -194,7 +208,6 @@ def check_dependencies():
     node_ver = run(["node", "--version"], capture_output=True, text=True).stdout.strip()
     ok(f"Node.js {node_ver} detected")
 
-    npm = shutil.which("npm")
     if not npm:
         err("npm is not installed. It should come with Node.js.")
         err("Try reinstalling Node.js from https://nodejs.org")
