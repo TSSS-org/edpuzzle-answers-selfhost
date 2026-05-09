@@ -20,10 +20,9 @@ _This is a paid advertisement. If you want to sponsor this project and advertise
 
 ## To run the server locally
 
-1. open a terminal in the root of the repo
-2. do ```python3 setup.py``` for macos and linux. For windows do ```python setup.py```
-3. just follow the setup script and every time you need to use it just run that same script again.
-### you can say no to the gemini api key but the option to generate answers for open ended questions wont work without the api key.
+- If youre on MacOS or Linux, double click the file that says ```startLINUXandMAC.sh```
+- If youre on Windows (10 or 11), double click the file that says ```startWINDOWS.bat```
+- if youre a dev and want to test the isntaller scripy you can open a terminal on the root of the folder and do ```python3 setup.py --clean``` that cleans up things like .venv and node modules
 
 ## Contents:
 
