@@ -9,6 +9,10 @@ import shutil
 import socket
 import subprocess
 import platform
+import argparse
+import time
+import threading
+import webbrowser
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "server", "config", "config.json")
@@ -17,7 +21,7 @@ VENV_DIR = os.path.join(BASE_DIR, ".venv")
 
 IS_WINDOWS = platform.system() == "Windows"
 
-# ===== colors =====
+# ===== colors & UI =====
 def c(text, code):
     if IS_WINDOWS:
         return text
@@ -29,6 +33,18 @@ def yellow(t): return c(t, "93")
 def bold(t):  return c(t, "1")
 def cyan(t):  return c(t, "96")
 
+def print_logo():
+    logo = f"""
+{cyan(bold("      ______     __                            __   "))}
+{cyan(bold("     / ____/____/ /___  __  __________  ____  / /__ "))}
+{cyan(bold("    / __/ / __  / __  / / / / /_  /_  / / __ \\/ / _ \\"))}
+{cyan(bold("   / /___/ /_/ / /_/ / /_/ / / /_  / /_/ /_/ / /  __/"))}
+{cyan(bold("  /_____/\\__,_/\\__,_/\\__,_/ /___/ /___/ .___/_/\\___/ "))}
+{cyan(bold("                                     /_/             "))}
+{yellow("               Self-Hosted Setup Helper v2.0")}
+    """
+    print(logo)
+
 def header(text):
     print()
     print(bold("=" * 54))
@@ -39,6 +55,31 @@ def ok(text):   print(green("  ✓ ") + text)
 def err(text):  print(red("  ✗ ") + text)
 def info(text): print(cyan("  → ") + text)
 def warn(text): print(yellow("  ! ") + text)
+
+class Spinner:
+    """A simple terminal spinner for long tasks"""
+    def __init__(self, message="Working..."):
+        self.message = message
+        self.stop_running = False
+        self.thread = threading.Thread(target=self._animate)
+
+    def _animate(self):
+        chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        i = 0
+        while not self.stop_running:
+            sys.stdout.write(f"\r  {cyan(chars[i % len(chars)])} {self.message}")
+            sys.stdout.flush()
+            time.sleep(0.1)
+            i += 1
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop_running = True
+        self.thread.join()
+        sys.stdout.write("\r" + " " * (len(self.message) + 10) + "\r")
 
 # ===== helpers =====
 def get_python():
@@ -59,15 +100,19 @@ def get_venv_playwright():
         return os.path.join(VENV_DIR, "Scripts", "playwright.exe")
     return os.path.join(VENV_DIR, "bin", "playwright")
 
-def run(cmd, **kwargs):
-    # On Windows, 'npm' must be called as 'npm.cmd' when not using shell=True
+def run(cmd, spinner_msg=None, **kwargs):
     if IS_WINDOWS and cmd[0] == "npm":
         cmd[0] = "npm.cmd"
-    return subprocess.run(cmd, **kwargs)
+    
+    if spinner_msg:
+        with Spinner(spinner_msg):
+            return subprocess.run(cmd, **kwargs)
+    else:
+        return subprocess.run(cmd, **kwargs)
 
 def ask(prompt, default=None):
     if default:
-        result = input(f"\n  {prompt} [{default}]: ").strip()
+        result = input(f"\n  {prompt} [{green(default)}]: ").strip()
         return result if result else default
     else:
         while True:
@@ -78,7 +123,10 @@ def ask(prompt, default=None):
 
 def ask_yn(prompt, default="y"):
     while True:
-        result = input(f"\n  {prompt} (y/n) [{default}]: ").strip().lower()
+        # Display the default option in uppercase and colored
+        options = f"[{green('Y')}/n]" if default == "y" else f"[y/{green('N')}]"
+        
+        result = input(f"\n  {prompt} {options}: ").strip().lower()
         if not result:
             return default == "y"
         if result in ("y", "yes"):
@@ -91,94 +139,104 @@ def port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(("localhost", port)) == 0
 
+# ===== tester / developer actions =====
+def nuke_local_env():
+    header("Cleaning Environment")
+    to_delete = [VENV_DIR, "node_modules", "dist", "server/config", "__pycache__"]
+    for folder in to_delete:
+        path = os.path.join(BASE_DIR, folder)
+        if os.path.exists(path):
+            try:
+                shutil.rmtree(path)
+                ok(f"Deleted {folder}")
+            except Exception as e:
+                warn(f"Could not delete {folder}: {e}")
+    print()
+    ok("Clean slate achieved! Starting fresh setup...")
+    time.sleep(1)
+
 # ===== steps =====
 def check_dependencies():
-    header("Checking Dependencies")
+    header("Step 1: System Checks")
 
-    # Python version
+    if IS_WINDOWS:
+        system32 = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32')
+        if not os.path.exists(os.path.join(system32, "vcruntime140.dll")):
+            warn("Microsoft Visual C++ Redistributable is missing!")
+            print("  This is required for the app to run on Windows.")
+            info("Opening download page... please install the X64 version.")
+            webbrowser.open("https://aka.ms/vs/17/release/vc_redist.x64.exe")
+            input(f"\n  {bold('Press Enter AFTER you have finished installing the Redistributable...')} ")
+
     major, minor = sys.version_info[:2]
     if major < 3 or minor < 9:
         err(f"Python 3.9+ is required. You have {major}.{minor}.")
         err("Download it from https://python.org")
         sys.exit(1)
-    ok(f"Python {major}.{minor}")
+    ok(f"Python {major}.{minor} detected")
 
-    # Node
     node = shutil.which("node")
     if not node:
         err("Node.js is not installed.")
         err("Download it from https://nodejs.org (npm is included)")
         sys.exit(1)
     node_ver = run(["node", "--version"], capture_output=True, text=True).stdout.strip()
-    ok(f"Node.js {node_ver}")
+    ok(f"Node.js {node_ver} detected")
 
-    # npm
     npm = shutil.which("npm")
     if not npm:
         err("npm is not installed. It should come with Node.js.")
         err("Try reinstalling Node.js from https://nodejs.org")
         sys.exit(1)
     npm_ver = run(["npm", "--version"], capture_output=True, text=True).stdout.strip()
-    ok(f"npm {npm_ver}")
+    ok(f"npm {npm_ver} detected")
 
 def setup_venv():
-    header("Setting Up Python Environment")
-
+    header("Step 2: Python Environment")
     if os.path.exists(VENV_DIR):
         ok("Virtual environment already exists, skipping.")
         return
-
-    info("Creating virtual environment...")
-    result = run([get_python(), "-m", "venv", VENV_DIR])
+    result = run([get_python(), "-m", "venv", VENV_DIR], spinner_msg="Creating isolated Python space...")
     if result.returncode != 0:
         err("Failed to create virtual environment.")
         sys.exit(1)
-    ok("Virtual environment created.")
+    ok("Python environment created.")
 
 def install_python_deps():
-    header("Installing Python Dependencies")
-
+    header("Step 3: Python Dependencies")
     req_path = os.path.join(BASE_DIR, "requirements.txt")
     if not os.path.exists(req_path):
         err("requirements.txt not found. Are you in the right folder?")
         sys.exit(1)
-
-    info("Installing packages (this may take a minute)...")
-    result = run([get_venv_pip(), "install", "-r", req_path, "-q"])
+    result = run([get_venv_pip(), "install", "-r", req_path, "-q"], spinner_msg="Downloading Python packages (this takes a minute)...")
     if result.returncode != 0:
         err("Failed to install Python dependencies.")
         sys.exit(1)
     ok("Python dependencies installed.")
 
 def install_playwright():
-    header("Installing Playwright Browser")
-
-    info("Installing Chromium browser for teacher login...")
-    result = run([get_venv_playwright(), "install", "chromium"])
+    result = run([get_venv_playwright(), "install", "chromium"], spinner_msg="Downloading browser engine for Teacher Login...")
     if result.returncode != 0:
         err("Failed to install Playwright Chromium.")
         sys.exit(1)
-    ok("Chromium installed.")
+    ok("Browser engine installed.")
 
 def install_node_deps():
-    header("Installing Node.js Dependencies & Building Frontend")
-
-    info("Installing npm packages...")
-    result = run(["npm", "install"], cwd=BASE_DIR)
+    header("Step 4: Frontend & App UI")
+    result = run(["npm", "install"], cwd=BASE_DIR, spinner_msg="Downloading Node.js packages...")
     if result.returncode != 0:
         err("npm install failed.")
         sys.exit(1)
     ok("Node packages installed.")
 
-    info("Building frontend (this may take a moment)...")
-    result = run(["npm", "run", "build:prod"], cwd=BASE_DIR)
+    result = run(["npm", "run", "build:prod"], cwd=BASE_DIR, spinner_msg="Building the user interface...")
     if result.returncode != 0:
         err("Frontend build failed.")
         sys.exit(1)
-    ok("Frontend built successfully.")
+    ok("User interface built successfully.")
 
 def setup_config():
-    header("Configuration")
+    header("Step 5: App Configuration")
 
     if os.path.exists(CONFIG_PATH):
         warn("config.json already exists.")
@@ -186,33 +244,39 @@ def setup_config():
             ok("Keeping existing config.")
             return
 
-    print()
-    print("  Answer the following questions to set up your config.")
-    print("  Press Enter to accept the default value shown in [brackets].")
+    print(f"\n  {bold('Let\'s set up your settings.')}")
+    print("  For most people, simply pressing [Enter] for every question is perfect.")
 
-    # Port
-    print()
+    print(f"\n  {bold('1. Network Port')}")
+    print("  This is the 'door' your computer uses to show the app.")
+    print("  Default is 8080. Only change this if you know what you are doing.")
+    
     while True:
-        port_str = ask("What port should the server run on?", default="8080")
+        port_str = ask("What port should the app run on?", default="8080")
         try:
             port = int(port_str)
         except ValueError:
-            print(red("  Please enter a valid number."))
+            warn("Please enter a valid number.")
             continue
+            
         if port_in_use(port):
-            warn(f"Port {port} is already in use.")
-            if IS_WINDOWS:
-                warn("On Windows, check Task Manager for what's using it.")
+            warn(f"Port {port} is currently being used by another app!")
+            suggested = port + 1
+            while port_in_use(suggested): 
+                suggested += 1
+            
+            if ask_yn(f"Would you like to use Port {suggested} instead?", default="y"):
+                port = suggested
+                ok(f"Switched to port {port}")
+                break
             else:
-                warn(f"Run: lsof -i :{port}   to see what's using it.")
-            if not ask_yn(f"Use port {port} anyway?", default="n"):
-                continue
-        break
+                err("Cannot continue while port is busy. Close the other app and try again.")
+        else:
+            break
 
     origin = f"http://localhost:{port}"
 
-    # Gemini
-    print()
+    print(f"\n  {bold('2. AI Features (Optional)')}")
     print("  The Gemini API key enables AI-powered open-ended answers.")
     print("  Get a free key at: https://aistudio.google.com/apikey")
     use_gemini = ask_yn("Do you have a Gemini API key?", default="n")
@@ -224,10 +288,9 @@ def setup_config():
         gemini_model = "gemini-3.1-flash-lite-preview"
         warn("Skipping Gemini — AI open-ended answers will not work.")
 
-    # Dev mode
+    print(f"\n  {bold('3. Advanced')}")
     dev_mode = ask_yn("Enable dev mode? (only for developers)", default="n")
 
-    # Build config
     config = {
         "dev_mode": dev_mode,
         "include_traceback": dev_mode,
@@ -252,45 +315,62 @@ def setup_config():
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=2)
 
-    ok(f"Config saved to server/config/config.json")
-    ok(f"Server will run on {origin}")
+    ok("Configuration saved successfully!")
+    header("Setup Complete!")
+    print(f"  {green('You can now start the server.')}")
+    print(f"  {green('Next time, just double-click your Start launcher file!')}")
 
 def start_server():
-    header("Starting Server")
-
     print()
-    print("  The server is about to start.")
-    print()
-
-    # Check if token is empty — warn the user what's about to happen
     config = {}
     if os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH) as f:
             config = json.load(f)
 
     token = config.get("teacher_token", "").strip()
+    port = config.get("server_port", 8080)
+    origin = config.get("origin", f"http://localhost:{port}")
+
     if not token:
         print(bold("  A browser window will open for you to log into your"))
         print(bold("  Edpuzzle TEACHER account. The window will close"))
         print(bold("  automatically once you've signed in."))
         print()
-        print("  After that, the server starts and you won't need to")
-        print("  log in again unless your token expires (~7 days).")
     else:
-        print("  Token found in config — skipping browser login.")
+        print("  Teacher token found — skipping browser login.")
 
     print()
     info("Launching server...")
-    print()
+    
+    # Wait for the actual server to spin up before opening the browser
+    def open_browser():
+        # This loop polls the port. Once it's in use, it means Playwright is done
+        # and the Flask server has successfully bound to the port.
+        for _ in range(600): # Waits up to 10 minutes in the background
+            if port_in_use(port):
+                time.sleep(0.5) # Give Flask a fraction of a second to fully stabilize
+                webbrowser.open(origin)
+                break
+            time.sleep(1)
+    
+    # Daemon=True ensures this background listening stops if the main script crashes
+    threading.Thread(target=open_browser, daemon=True).start()
+
+    print(f"  {green('The app should open automatically in your browser after you log in.')}")
+    print(f"  {green('If it does not, go to:')} {bold(cyan(origin))}")
+    print(f"\n  {yellow('Press CTRL+C in this window to stop the server.')}\n")
 
     server_path = os.path.join(BASE_DIR, "server", "main.py")
     run([get_venv_python(), server_path])
 
 # ===== main =====
 def main():
-    print()
-    print(bold(cyan("  Edpuzzle Answers — Self-Host Setup")))
-    print(bold(cyan("  ====================================")))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--clean', action='store_true', help='Delete environment and start over')
+    args, unknown = parser.parse_known_args()
+
+    if args.clean:
+        nuke_local_env()
 
     # If config exists and setup already done, just start
     already_setup = (
@@ -299,22 +379,20 @@ def main():
         os.path.exists(os.path.join(BASE_DIR, "dist"))
     )
 
-    if already_setup:
-        header("Setup Already Complete")
-        ok("Config, venv, and dist folder all found.")
-        if ask_yn("Run setup again from scratch?", default="n"):
-            already_setup = False
-        else:
+    if already_setup and not args.clean:
+        if ask_yn("Setup is already complete. Do you want to start the server?", default="y"):
             start_server()
-            return
+        return
 
-    if not already_setup:
-        check_dependencies()
-        setup_venv()
-        install_python_deps()
-        install_playwright()
-        install_node_deps()
-        setup_config()
+    check_dependencies()
+    setup_venv()
+    install_python_deps()
+    install_playwright()
+    install_node_deps()
+    setup_config()
+    
+    print()
+    if ask_yn("Would you like to start the server now?", default="y"):
         start_server()
 
 if __name__ == "__main__":
@@ -322,5 +400,5 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print()
-        print(yellow("\n  Setup cancelled."))
+        print(yellow("\n  Process stopped by user."))
         sys.exit(0)
