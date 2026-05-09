@@ -23,7 +23,7 @@ _This is a paid advertisement. If you want to sponsor this project and advertise
 1. open a terminal in the root of the repo
 2. do ```python3 setup.py``` for macos and linux. For windows do ```python setup.py```
 3. just follow the setup script and every time you need to use it just run that same script again.
-### you can say no to the gemini api key but the option to generate answers for open ended questions wont work.
+### you can say no to the gemini api key but the option to generate answers for open ended questions wont work without the api key.
 
 ## Contents:
 
