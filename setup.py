@@ -186,16 +186,30 @@ def check_dependencies():
         sys.exit(1)
     ok(f"Python {major}.{minor} detected")
 
-    # Check for Node.js and npm, and auto-install on Linux if missing
+    # Check for Node.js and npm
     node = shutil.which("node")
     npm = shutil.which("npm")
     
+    # === UNIVERSAL LINUX AUTO-INSTALLER ===
     if not node or not npm:
-        if platform.system() == "Linux" and shutil.which("apt"):
-            info("Node.js or npm is missing. Attempting to install via apt...")
-            print(yellow("  You may be prompted for your sudo password."))
-            subprocess.run(["sudo", "apt", "update"])
-            subprocess.run(["sudo", "apt", "install", "-y", "nodejs", "npm"])
+        if platform.system() == "Linux":
+            # Map package managers to their respective install commands
+            linux_installers = {
+                "apt": [["sudo", "apt", "update"], ["sudo", "apt", "install", "-y", "nodejs", "npm"]], # Debian/Ubuntu
+                "dnf": [["sudo", "dnf", "install", "-y", "nodejs", "npm"]],                            # Fedora/RHEL
+                "pacman": [["sudo", "pacman", "-S", "--noconfirm", "nodejs", "npm"]],                  # Arch/Manjaro
+                "zypper": [["sudo", "zypper", "install", "-y", "nodejs", "npm"]],                      # openSUSE
+                "apk": [["sudo", "apk", "add", "nodejs", "npm"]]                                       # Alpine
+            }
+            
+            # Loop through the list to find which package manager this distro uses
+            for pm, commands in linux_installers.items():
+                if shutil.which(pm):
+                    info(f"Node.js or npm is missing. Attempting to install via {pm}...")
+                    print(yellow("  You may be prompted for your sudo password."))
+                    for cmd in commands:
+                        subprocess.run(cmd)
+                    break # Stop checking once we find a match and run it
             
             # Re-check to see if the installation succeeded
             node = shutil.which("node")
@@ -203,14 +217,14 @@ def check_dependencies():
 
     if not node:
         err("Node.js is not installed.")
-        err("Download it from https://nodejs.org (npm is included)")
+        err("Could not auto-install. Please download it manually from https://nodejs.org")
         sys.exit(1)
     node_ver = run(["node", "--version"], capture_output=True, text=True).stdout.strip()
     ok(f"Node.js {node_ver} detected")
 
     if not npm:
         err("npm is not installed. It should come with Node.js.")
-        err("Try reinstalling Node.js from https://nodejs.org")
+        err("Could not auto-install. Try reinstalling Node.js manually.")
         sys.exit(1)
     npm_ver = run(["npm", "--version"], capture_output=True, text=True).stdout.strip()
     ok(f"npm {npm_ver} detected")
@@ -220,10 +234,39 @@ def setup_venv():
     if os.path.exists(VENV_DIR):
         ok("Virtual environment already exists, skipping.")
         return
+        
     result = run([get_python(), "-m", "venv", VENV_DIR], spinner_msg="Creating isolated Python space...")
+    
+    # Auto-fix for Linux distros missing venv support
+    if result.returncode != 0:
+        if platform.system() == "Linux":
+            major, minor = sys.version_info[:2]
+            
+            # Map package managers to their venv/python packages
+            venv_installers = {
+                "apt": [["sudo", "apt", "update"], ["sudo", "apt", "install", "-y", f"python{major}.{minor}-venv"]],
+                "dnf": [["sudo", "dnf", "install", "-y", "python3"]],
+                "pacman": [["sudo", "pacman", "-S", "--noconfirm", "python"]],
+                "zypper": [["sudo", "zypper", "install", "-y", "python3-venv"]],
+                "apk": [["sudo", "apk", "add", "python3"]]
+            }
+            
+            for pm, commands in venv_installers.items():
+                if shutil.which(pm):
+                    info(f"Missing Python venv support. Attempting to auto-install via {pm}...")
+                    print(yellow("  You may be prompted for your sudo password."))
+                    for cmd in commands:
+                        subprocess.run(cmd)
+                    break
+            
+            # Instantly try to create the environment again
+            result = run([get_python(), "-m", "venv", VENV_DIR], spinner_msg="Retrying virtual environment creation...")
+            
     if result.returncode != 0:
         err("Failed to create virtual environment.")
+        err("Your system is missing 'venv' support. Please install it manually for your distribution.")
         sys.exit(1)
+        
     ok("Python environment created.")
 
 def install_python_deps():
